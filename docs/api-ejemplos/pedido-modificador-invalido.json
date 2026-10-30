@@ -1,0 +1,6 @@
+{
+  "customerName": "Luis",
+  "items": [
+    { "productId": 8, "size": null, "modifiers": ["SHOT_EXTRA"] }
+  ]
+}

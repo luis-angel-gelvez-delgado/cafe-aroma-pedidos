@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Café Aroma · Mostrador</title>
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+<header class="topbar">
+    <h1>☕ Café Aroma</h1>
+    <p>Pedidos de mostrador y recogida</p>
+</header>
+
+<main class="page">
+    <!-- Mensajes del servidor -->
+    <p class="alert success" th:if="${createdOrder != null}">
+        Pedido <strong th:text="${createdOrder.orderNumber()}">#0001</strong> registrado para
+        <strong th:text="${createdOrder.customerName()}">Ana</strong>.
+        Total calculado por el servidor:
+        <strong>$<span th:text="${#numbers.formatInteger(createdOrder.total(), 1, 'POINT')}">0</span></strong>
+    </p>
+    <p class="alert success" th:if="${success != null}" th:text="${success}">Éxito</p>
+    <p class="alert error" th:if="${error != null}" th:text="${error}">Error</p>
+
+    <div class="order-area">
+        <!-- Menú: solo muestra las opciones válidas de cada producto -->
+        <section class="panel" aria-labelledby="menu-title">
+            <h2 id="menu-title">Menú</h2>
+            <div class="category" th:each="group : ${menu}">
+                <h3 th:text="${group.key}">Categoría</h3>
+                <div class="product-grid">
+                    <article class="product" th:each="p : ${group.value}"
+                             th:attr="data-product-id=${p.id()},data-product-name=${p.name()}">
+                        <h4 th:text="${p.name()}">Producto</h4>
+                        <p class="price">Desde $<span th:text="${#numbers.formatInteger(p.basePrice(), 1, 'POINT')}">0</span></p>
+
+                        <label class="field" th:if="${!p.sizes().isEmpty()}">Tamaño
+                            <select class="size">
+                                <option th:each="s : ${p.sizes()}" th:value="${s.code()}"
+                                        th:attr="data-label=${s.label()}" th:text="${s.displayLabel()}">Mediano</option>
+                            </select>
+                        </label>
+
+                        <fieldset class="modifiers" th:if="${!p.modifiers().isEmpty()}">
+                            <legend>Opciones</legend>
+                            <label th:each="m : ${p.modifiers()}">
+                                <input type="checkbox" class="modifier" th:value="${m.code()}"
+                                       th:attr="data-label=${m.label()}">
+                                <span th:text="${m.displayLabel()}">Opción</span>
+                            </label>
+                        </fieldset>
+
+                        <button type="button" class="btn secondary add-item">Agregar</button>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pedido en curso (se arma en el navegador y se envía a POST /api/orders) -->
+        <aside class="panel cart" aria-labelledby="cart-title">
+            <h2 id="cart-title">Pedido en curso</h2>
+            <label class="field">Nombre del cliente
+                <input type="text" id="customer-name" maxlength="60" placeholder="Ej. Ana" autocomplete="off">
+            </label>
+            <ul id="cart-items" class="cart-items"></ul>
+            <p id="order-error" class="alert error" hidden></p>
+            <button type="button" id="submit-order" class="btn primary">Registrar pedido</button>
+            <p class="hint">El total y las validaciones los hace el servidor al registrar.</p>
+        </aside>
+    </div>
+
+    <!-- Tablero de pedidos activos por estado -->
+    <section class="panel" aria-labelledby="board-title">
+        <h2 id="board-title">Pedidos activos</h2>
+        <div class="board">
+            <div class="column" th:each="col : ${board}">
+                <h3>
+                    <span class="badge" th:classappend="${'status-' + col.key.name().toLowerCase()}"
+                          th:text="${col.key.label}">Recibido</span>
+                    <span class="count" th:text="${col.value.size()}">0</span>
+                </h3>
+                <p class="empty" th:if="${col.value.isEmpty()}">Sin pedidos</p>
+
+                <article class="order-card" th:each="o : ${col.value}">
+                    <header>
+                        <strong th:text="${o.orderNumber()}">#0001</strong>
+                        <span class="customer" th:text="${o.customerName()}">Ana</span>
+                    </header>
+                    <ul>
+                        <li th:each="it : ${o.items()}">
+                            <span th:text="${it.productName()}">Latte</span>
+                            <span th:if="${it.size() != null}" th:text="${'· ' + it.size()}"></span>
+                            <span class="muted" th:unless="${it.modifiers().isEmpty()}"
+                                  th:text="${'(' + #strings.listJoin(it.modifiers(), ', ') + ')'}"></span>
+                        </li>
+                    </ul>
+                    <p class="total">
+                        Total $<span th:text="${#numbers.formatInteger(o.total(), 1, 'POINT')}">0</span>
+                        <span class="badge" th:classappend="${o.paid()} ? 'paid' : 'pending'"
+                              th:text="${o.paymentStatusLabel()}">Pendiente</span>
+                    </p>
+                    <div class="actions">
+                        <form th:if="${o.nextStatus() != null}" method="post"
+                              th:action="@{/orders/{id}/status(id=${o.id()})}">
+                            <input type="hidden" name="status" th:value="${o.nextStatus()}">
+                            <button type="submit" class="btn primary" th:text="${'→ ' + o.nextStatusLabel()}">Avanzar</button>
+                        </form>
+                        <form th:if="${o.cancellable()}" method="post"
+                              th:action="@{/orders/{id}/status(id=${o.id()})}">
+                            <input type="hidden" name="status" value="CANCELADO">
+                            <button type="submit" class="btn danger">Cancelar</button>
+                        </form>
+                        <form method="post" th:action="@{/orders/{id}/payment(id=${o.id()})}">
+                            <input type="hidden" name="paymentStatus" th:value="${o.paid()} ? 'PENDIENTE' : 'PAGADO'">
+                            <button type="submit" class="btn secondary"
+                                    th:text="${o.paid()} ? 'Marcar pendiente' : 'Marcar pagado'">Marcar pagado</button>
+                        </form>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- Historial: entregados y cancelados -->
+    <section class="panel" aria-labelledby="closed-title">
+        <h2 id="closed-title">Entregados y cancelados</h2>
+        <p class="empty" th:if="${closedOrders.isEmpty()}">Todavía no hay pedidos cerrados.</p>
+        <table th:unless="${closedOrders.isEmpty()}">
+            <thead>
+            <tr><th>Pedido</th><th>Cliente</th><th>Estado</th><th>Pago</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="o : ${closedOrders}">
+                <td th:text="${o.orderNumber()}">#0001</td>
+                <td th:text="${o.customerName()}">Ana</td>
+                <td><span class="badge" th:classappend="${'status-' + o.status().name().toLowerCase()}"
+                          th:text="${o.statusLabel()}">Entregado</span></td>
+                <td th:text="${o.paymentStatusLabel()}">Pagado</td>
+                <td>$<span th:text="${#numbers.formatInteger(o.total(), 1, 'POINT')}">0</span></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script th:src="@{/js/order-form.js}"></script>
+</body>
+</html>

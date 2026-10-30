@@ -1,0 +1,7 @@
+{
+  "customerName": "Ana",
+  "items": [
+    { "productId": 4, "size": "GRANDE", "modifiers": ["SHOT_EXTRA", "LECHE_DESLACTOSADA"] },
+    { "productId": 8, "size": null, "modifiers": ["PARA_LLEVAR"] }
+  ]
+}
